@@ -4,23 +4,25 @@ from fastembed import TextEmbedding
 
 app = FastAPI()
 
-# -- last ned én gang ved oppstart
-EMBEDDER = TextEmbedding(model_name="qdrant/all-MiniLM-L6-v2-onnx",
-                         device="cpu",  # Render free-tier har ikke GPU
-                         dtype="float32")               # reduserer RAM
+MODEL_NAME = "all-MiniLM-L6-v2"          # ✅ gyldig hos fastembed
+
+EMBEDDER = TextEmbedding(
+    model_name=MODEL_NAME,
+    device="cpu",          # Render-free har ingen GPU
+    batch_size=32,         # juster hvis minneproblemer
+)
 
 class EmbedIn(BaseModel):
-    text: str                     # én streng inn
+    text: str
 
 class EmbedOut(BaseModel):
-    vector: list[float]           # JSON-vennlig liste ut
+    vector: list[float]
 
 @app.post("/embed", response_model=EmbedOut)
 def embed(req: EmbedIn):
-    # fastembed gir en generator → next(...)
     vec = next(EMBEDDER.embed([req.text]))
-    return {"vector": vec.tolist()}        # tolist() gjør den JSON-klar
+    return {"vector": vec.tolist()}
 
 @app.get("/")
 def root():
-    return {"status": "ok"}
+    return {"status": "ok", "model": MODEL_NAME}
