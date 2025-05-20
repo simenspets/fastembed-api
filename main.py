@@ -2,16 +2,25 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from fastembed import TextEmbedding
 
-app = FastAPI(title="FastEmbed MiniLM API")
-embedder = TextEmbedding(
-    model_name="sentence-transformers/all-MiniLM-L6-v2",  # 384-dim
-    device="cpu"
-)
+app = FastAPI()
 
-class Inp(BaseModel):
-    text: str
+# -- last ned én gang ved oppstart
+EMBEDDER = TextEmbedding(model_name="qdrant/all-MiniLM-L6-v2-onnx",
+                         device="cpu",  # Render free-tier har ikke GPU
+                         dtype="float32")               # reduserer RAM
 
-@app.post("/embed")
-def embed(inp: Inp):
-    vec = next(embedder.embed([inp.text]))       # ⇒ list[float]
-    return {"embedding": vec}
+class EmbedIn(BaseModel):
+    text: str                     # én streng inn
+
+class EmbedOut(BaseModel):
+    vector: list[float]           # JSON-vennlig liste ut
+
+@app.post("/embed", response_model=EmbedOut)
+def embed(req: EmbedIn):
+    # fastembed gir en generator → next(...)
+    vec = next(EMBEDDER.embed([req.text]))
+    return {"vector": vec.tolist()}        # tolist() gjør den JSON-klar
+
+@app.get("/")
+def root():
+    return {"status": "ok"}
