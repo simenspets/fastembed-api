@@ -1,49 +1,35 @@
-# main.py
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastembed import TextEmbedding
 
-# ────────────────────────── modellvalg ────────────────────────────
-MODEL_NAME = "Supabase/gte-small"      # flerspråklig, 384-dim
+MODEL_NAME = "Supabase/gte-small"       # 384-dim, flerspråklig
 EMBEDDER   = TextEmbedding(model_name=MODEL_NAME, device="cpu")
 
 app = FastAPI(title="FastEmbed-API", version="1.0")
 
 
-# ────────────────────────── datamodeller ──────────────────────────
 class EmbedRequest(BaseModel):
     text: str
-    mode: str | None = "query"         # "query"  eller "passage"
+    mode: str | None = "query"          # "query" | "passage"
 
 
 class EmbedResponse(BaseModel):
     embedding: list[float]
-    dim: int  = 384
+    dim: int = 384
     model: str = MODEL_NAME
     mode: str
 
 
-# ───────────────────────────── routes ─────────────────────────────
-@app.get("/", tags=["health"])
-def root():
+@app.get("/")
+def health():
     return {"status": "ok", "model": MODEL_NAME}
 
 
-@app.post("/embed", response_model=EmbedResponse, tags=["embed"])
+@app.post("/embed", response_model=EmbedResponse)
 def embed(req: EmbedRequest):
     if not req.text.strip():
         raise HTTPException(400, detail="text must not be empty")
 
-    # === ❶ «Tekst-prefiks» ======================================
-    #
-    # GTE / E5-modellene ble trent med et spesifikt start-prefiks:
-    #   •  bruker-spørsmål   ->  "query: …"
-    #   •  dokument-chunk    ->  "passage: …"
-    #
-    #  Følger du dette mønsteret får du 5-15 % høyere nøyaktighet.
-    #
     prefix = "query: " if req.mode == "query" else "passage: "
-    text_for_model = prefix + req.text
-
-    vec = EMBEDDER.embed([text_for_model])[0]          # np.array
+    vec = EMBEDDER.embed([prefix + req.text])[0]       # np.ndarray
     return EmbedResponse(embedding=vec.tolist(), mode=req.mode)
