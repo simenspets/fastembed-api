@@ -1,45 +1,39 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI
 from fastembed import TextEmbedding
-import numpy as np
+import os
 
-MODEL_NAME = "BAAI/bge-small-en-v1.5"   # 384 dim – støttes i fastembed 0.7.0
+# ── 1. Modell & instans  ────────────────────────────────────────────────────────
+MODEL_NAME = os.getenv("MODEL_NAME", "BAAI/bge-small-en-v1.5")
 EMBEDDER   = TextEmbedding(model_name=MODEL_NAME, device="cpu")
 
-app = FastAPI(title="FastEmbed-API", version="1.0")
+# Finn dimensjonen (prøv felt først → ellers beregn).
+if hasattr(EMBEDDER, "embedding_dimension"):
+    DIM = EMBEDDER.embedding_dimension
+elif hasattr(EMBEDDER, "dimension"):
+    DIM = EMBEDDER.dimension
+else:
+    # fallback – embed én dummy-tekst og mål lengden på vektoren
+    DIM = len(EMBEDDER.embed(["fastembed"])[0])
 
-
-class EmbedRequest(BaseModel):
-    text: str
-    mode: str | None = "query"          # "query" | "passage"
-
-
-class EmbedResponse(BaseModel):
-    embedding: list[float]
-    dim: int
-    model: str
-    mode: str
+# ── 2. FastAPI-app  ─────────────────────────────────────────────────────────────
+app = FastAPI()
 
 
 @app.get("/")
 def health():
+    """
+    En enkel helsesjekk som Render kan pinge.
+    """
     return {
         "status": "ok",
         "model": MODEL_NAME,
-        "dim": EMBEDDER.dimension,        # 384 når du bruker bge-small-en-v1.5
+        "dim": DIM,
     }
 
 
-@app.post("/embed", response_model=EmbedResponse)
-def embed(req: EmbedRequest):
-    if not req.text.strip():
-        raise HTTPException(status_code=400, detail="text must not be empty")
-
-    prefix = "query: " if req.mode == "query" else "passage: "
-    vec: np.ndarray = EMBEDDER.embed([prefix + req.text])[0]
-    return EmbedResponse(
-        embedding=vec.tolist(),
-        dim=vec.size,
-        model=MODEL_NAME,
-        mode=req.mode,
-    )
+@app.post("/embed")
+def embed(texts: list[str]):
+    """
+    Gi meg en liste tekster → tilbake kommer en liste embeddings.
+    """
+    return EMBEDDER.embed(texts)
