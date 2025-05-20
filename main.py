@@ -26,7 +26,7 @@ def health():
     return {
         "status": "ok",
         "model": MODEL_NAME,
-        "dim": EMBEDDER.embedding_dimension,
+        "dim": EMBEDDER.dimension,        # 384 når du bruker bge-small-en-v1.5
     }
 
 
